@@ -1,7 +1,9 @@
 ﻿namespace Sitecore.Support.EmailCampaign.Cm.Dispatch
 {
   using System.Collections.Generic;
+  using System.Linq;
 
+  using Sitecore.Diagnostics;
   using Sitecore.EmailCampaign.Cm.Dispatch;
   using Sitecore.EmailCampaign.Cm.Managers;
   using Sitecore.ExM.Framework.Distributed.Tasks.TaskPools.ShortRunning;
@@ -17,6 +19,8 @@
   [UsedImplicitly]
   public class DispatchTask : Sitecore.EmailCampaign.Cm.Dispatch.DispatchTask
   {
+    private IContactService ContactService { get; }
+
     public DispatchTask(
       ShortRunningTaskPool taskPool,
       IRecipientValidator recipientValidator, 
@@ -40,11 +44,22 @@
         recipientManagerFactory,
         sentMessageManager)
     {
+      Assert.ArgumentNotNull(contactService, nameof(contactService));
+
+      ContactService = contactService;
     }
 
     protected override IReadOnlyCollection<IEntityLookupResult<Contact>> GetContacts(List<DispatchQueueItem> dispatchQueueItems)
     {
       var contacts = base.GetContacts(dispatchQueueItems);
+
+      var skippedCount = contacts.Count;
+      contacts = contacts
+        .Where(x => x?.Entity?.Facets.ContainsKey("Email") ?? false)
+        .ToArray();
+
+      skippedCount -= contacts.Count;
+      Log.Debug($"Skipped {skippedCount} contacts without email");
 
       return contacts;
     }
